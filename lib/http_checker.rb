@@ -15,8 +15,7 @@ class HttpChecker
   UANAME
 
   REDIRECT_LIMIT = 10
-  DNS_ERROR = 502
-  REQUEST_ERROR = 504
+  REQUEST_ERROR = 502
 
   attr_reader :csv_file, :websites, :statuses
 
@@ -28,44 +27,61 @@ class HttpChecker
 
   private
 
+  def read_websites
+    CSV.foreach(csv_file, headers: true) do |row|
+      websites.push(row['URL'])
+    end
+  end
+
   def read_statuses
-    websites.each do |website|
+    websites.each_with_index do |website, index|
       start_time = Time.now
+
+      status = check_status(website)
+      puts "#{index}. #{website}: #{status}"
 
       statuses.push(
         [
-          website, http_fetch(website), (Time.now - start_time).round(2)
+          website, status, (Time.now - start_time).round(2)
         ]
       )
     end
   end
 
-  def parse_link_to_uri(website)
-    Addressable::URI.heuristic_parse(website)
+  def check_status(url, limit = REDIRECT_LIMIT)
+    return REQUEST_ERROR if limit.zero?
+
+    case response = fetcher(url)
+    when Net::HTTPSuccess
+      response.code.to_i
+    when Net::HTTPRedirection
+      check_status(response['location'], limit - 1)
+    else
+      REQUEST_ERROR
+    end
   end
 
-  def http_fetch(url, limit = REDIRECT_LIMIT)
-    raise REQUEST_ERROR, 'HTTP redirect too deep' if limit.zero?
+  def fetcher(url)
+    HttpFetch.new(url).process
+  end
+end
 
-    uri = parse_link_to_uri(url)
-
-    response = Net::HTTP.start(
-      uri.host, uri.port, use_ssl: true
-    ) { |http| http.request_head(uri) }
-
-    case response
-    when Net::HTTPSuccess     then response.code.to_i
-    when Net::HTTPRedirection then http_fetch(response['location'], limit - 1)
-    else REQUEST_ERROR
-    end
-  rescue SocketError
-    DNS_ERROR
+class HttpFetch
+  def initialize(url)
+    @uri = Addressable::URI.heuristic_parse(url)
   end
 
-  def read_websites
-    CSV.foreach(csv_file, headers: true) do |row|
-      websites << row['URL']
-    end
+  # def process
+  #   request = HTTPClient.head_async(@uri)
+  # end
+
+  def process
+    Net::HTTP.start(
+      @uri.host, @uri.port, use_ssl: true, read_timeout: 10
+    ) { |http| http.request_head(@uri) }
+  rescue SocketError, Errno::ECONNREFUSED, Net::ReadTimeout, Net::OpenTimeout,
+         OpenSSL::SSL::SSLError, Timeout::Error, Errno::EINVAL, Errno::ECONNRESET, EOFError,
+         Net::HTTPBadResponse, Net::HTTPHeaderSyntaxError, Net::ProtocolError
   end
 end
 
