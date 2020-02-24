@@ -5,4 +5,3 @@ source "https://rubygems.org"
 gem 'addressable'
 gem 'guard'
 gem 'guard-test'
-gem 'httpclient'

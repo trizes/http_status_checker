@@ -13,17 +13,19 @@ class HttpCheckerTest < Test::Unit::TestCase
   end
 
   def test_checks_websites
-    assert_equal(
-      ['google.com', 'raketaapp2.com', '42istheansweryouneed.com'],
-      subject.map { |el| el[0] }
-    )
+    results = subject.map { |el| el[0] }
+
+    ['google.com', 'raketaapp2.com', '42istheansweryouneed.com'].each do |website|
+      assert(results.include?(website))
+    end
   end
 
   def test_checks_status
-    assert_equal(
-      [200, 502, 502],
-      subject.map { |el| el[1] } #values.map { |result| result[:status] }
-    )
+    results = subject.map { |el| el[1] }
+
+    [200, 502].each do |status|
+      assert(results.include?(status))
+    end
   end
 
   def test_measures_runtime
